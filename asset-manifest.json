@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/edward-hirst-website/static/css/main.e6c13ad2.css",
+    "main.js": "/edward-hirst-website/static/js/main.68bfa89a.js",
+    "static/js/453.f92e71dc.chunk.js": "/edward-hirst-website/static/js/453.f92e71dc.chunk.js",
+    "static/media/personal.jpg": "/edward-hirst-website/static/media/personal.2553beb0eccf551d37c5.jpg",
+    "index.html": "/edward-hirst-website/index.html",
+    "main.e6c13ad2.css.map": "/edward-hirst-website/static/css/main.e6c13ad2.css.map",
+    "main.68bfa89a.js.map": "/edward-hirst-website/static/js/main.68bfa89a.js.map",
+    "453.f92e71dc.chunk.js.map": "/edward-hirst-website/static/js/453.f92e71dc.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.68bfa89a.js"
+  ]
+}
