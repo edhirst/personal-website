@@ -479,7 +479,16 @@ const Research: React.FC = () => {
           }}
         >
           I'm always open to enquiries for supervision from prospective
-          students, or for more general research collaboration. Please get in touch!
+          students, or for more general research collaboration.
+          <Link
+            href="mailto:e.hirst@qmul.ac.uk"
+            sx={{
+              mt: 1,
+              "&:hover": { color: "primary.main" },
+            }}
+          >
+            <Typography variant="body1">Please get in touch!</Typography>
+          </Link>
         </Typography>
       </Container>
     </Box>
