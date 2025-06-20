@@ -44,7 +44,7 @@ const StyledTimeline = styled(Timeline)(({ theme }) => ({
 const positions = [
   {
     title: "POSTDOC",
-    institution: "Queen Mary, U. of London",
+    institution: "Queen Mary, University of London",
     dates: "2023-present",
     link: "https://www.qmul.ac.uk/maths/",
   },
@@ -56,7 +56,7 @@ const positions = [
   },
   {
     title: "PHD",
-    institution: "City St George's, U. of London.",
+    institution: "City St George's, University of London.",
     dates: "2019-2023",
     link: "https://www.city.ac.uk/about/schools/science-technology/mathematics",
   },
