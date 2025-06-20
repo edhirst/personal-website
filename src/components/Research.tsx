@@ -462,6 +462,7 @@ const Research: React.FC = () => {
                   href="https://inspirehep.net/authors/1791403"
                   target="_blank"
                   rel="noopener noreferrer"
+                  sx={{textAlign: "center"}}
                 >
                   View Full Publication List on Inspire
                 </Button>

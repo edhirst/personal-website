@@ -50,19 +50,19 @@ const positions = [
   },
   {
     title: "VISITOR",
-    institution: "LIMS, London",
+    institution: "London Institute for Mathematical Sciences",
     dates: "2021-2023",
     link: "https://lims.ac.uk/",
   },
   {
     title: "PHD",
-    institution: "London, City U.",
+    institution: "City St George's, U. of London.",
     dates: "2019-2023",
     link: "https://www.city.ac.uk/about/schools/science-technology/mathematics",
   },
   {
     title: "MASTER",
-    institution: "Imperial Coll., London",
+    institution: "Imperial College London",
     dates: "2015-2019",
     link: "https://www.imperial.ac.uk/mathematics",
   },
