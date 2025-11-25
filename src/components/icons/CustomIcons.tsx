@@ -38,12 +38,14 @@ export const GoogleScholarIcon: React.FC<SvgIconProps> = (props) => {
   return (
     <SvgIcon {...props} viewBox="0 0 24 24">
       <path
-        d="M12 24C5.372 24 0 18.628 0 12S5.372 0 12 0s12 5.372 12 12-5.372 12-12 12z"
+        d="M12 0L0 8v4h2v8h6v-6h8v6h6v-8h2V8L12 0zm0 2.5L20 8H4l8-5.5z"
         fill="currentColor"
       />
-      <path
-        d="M12 4.8L6 9.6v1.2h1.2v4.8h2.4v-3.6h4.8v3.6h2.4v-4.8H18V9.6l-6-4.8zm0 1.68l3.84 2.88H8.16L12 6.48z"
-        fill={isDarkMode ? "#000" : "#fff"}
+      <circle
+        cx="12"
+        cy="16"
+        r="6"
+        fill="currentColor"
       />
     </SvgIcon>
   );
