@@ -11,7 +11,7 @@ import {
 import EmailIcon from "@mui/icons-material/Email";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import LinkedInIcon from "@mui/icons-material/LinkedIn";
-import { OrcidIcon, InspireIcon } from "./icons/CustomIcons";
+import { OrcidIcon, InspireIcon, GoogleScholarIcon } from "./icons/CustomIcons";
 
 const Contact: React.FC = () => {
   const theme = useTheme();
@@ -44,7 +44,7 @@ const Contact: React.FC = () => {
           }
         >
           <Link
-            href="mailto:e.hirst@qmul.ac.uk"
+            href="mailto:ehirst@unicamp.br"
             sx={{
               display: "flex",
               alignItems: "center",
@@ -54,7 +54,7 @@ const Contact: React.FC = () => {
             }}
           >
             <EmailIcon sx={{ mr: 1, fontSize: "1.2rem" }} />
-            <Typography variant="body2">e.hirst@qmul.ac.uk</Typography>
+            <Typography variant="body2">ehirst@unicamp.br</Typography>
           </Link>
 
           <Stack
@@ -84,6 +84,14 @@ const Contact: React.FC = () => {
               title="InspireHEP"
             >
               <InspireIcon sx={{ fontSize: "1.2rem" }} />
+            </Link>
+            <Link
+              href="https://scholar.google.com/citations?hl=en&user=_9IPJEIAAAAJ&view_op=list_works"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Google Scholar"
+            >
+              <GoogleScholarIcon sx={{ fontSize: "1.2rem" }} />
             </Link>
             <Link
               href="https://github.com/edhirst"

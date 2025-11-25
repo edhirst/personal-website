@@ -43,9 +43,15 @@ const StyledTimeline = styled(Timeline)(({ theme }) => ({
 
 const positions = [
   {
+    title: "RESEARCH FELLOW (FAPESP)",
+    institution: "University of Campinas",
+    dates: "2025-present",
+    link: "https://www.ime.unicamp.br/",
+  },
+  {
     title: "POSTDOC",
     institution: "Queen Mary, University of London",
-    dates: "2023-present",
+    dates: "2023-2025",
     link: "https://www.qmul.ac.uk/maths/",
   },
   {

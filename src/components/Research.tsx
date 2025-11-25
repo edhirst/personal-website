@@ -481,7 +481,7 @@ const Research: React.FC = () => {
           I'm always open to enquiries for supervision from prospective
           students, or for more general research collaboration.
           <Link
-            href="mailto:e.hirst@qmul.ac.uk"
+            href="mailto:ehirst@unicamp.br"
             sx={{
               mt: 1,
               "&:hover": { color: "primary.main" },
