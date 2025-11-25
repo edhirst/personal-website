@@ -37,21 +37,11 @@ export const GoogleScholarIcon: React.FC<SvgIconProps> = (props) => {
 
   return (
     <SvgIcon {...props} viewBox="0 0 24 24">
-      {/* Circle */}
-      <circle
-        cx="12"
-        cy="14"
-        r="8"
+      {/* Official Google Scholar logo - combined path with nonzero fill rule */}
+      <path
+        d="M12 0L2.5 6.5v4L12 17l9.5-6.5v-4L12 0z M12 10c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5 6.5-2.91 6.5-6.5-2.91-6.5-6.5-6.5z"
         fill="currentColor"
-      />
-      {/* Diamond (graduation cap) rotated 45 degrees */}
-      <rect
-        x="4.34"
-        y="4.34"
-        width="10"
-        height="10"
-        transform="rotate(45 12 6.84)"
-        fill="currentColor"
+        fillRule="nonzero"
       />
     </SvgIcon>
   );
