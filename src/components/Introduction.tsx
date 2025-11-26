@@ -43,8 +43,8 @@ const StyledTimeline = styled(Timeline)(({ theme }) => ({
 
 const positions = [
   {
-    title: "RESEARCH FELLOW (FAPESP)",
-    institution: "University of Campinas",
+    title: "RESEARCH FELLOW",
+    institution: "IMECC, University of Campinas",
     dates: "2025-present",
     link: "https://www.ime.unicamp.br/",
   },
@@ -118,7 +118,7 @@ const Introduction: React.FC = () => {
             Dr. Edward Hirst
           </Typography>
           <Typography variant="h5" color="primary" gutterBottom>
-            Postdoctoral Researcher
+            FAPESP Research Fellow
           </Typography>
           <Typography variant="body1" paragraph sx={{ mt: 3 }}>
             My research centres on application of machine learning methods to
