@@ -23,16 +23,26 @@ declare global {
     MathJax?: {
       typesetPromise?: () => Promise<void>;
     };
+    __mathJaxLoadPromise?: Promise<void>;
   }
 }
 
 interface Publication {
+  id: string;
   title: string;
-  authors: string;
+  authors: string[];
   abstract?: string;
   link: string;
   arxivId?: string;
-  bibtex?: string;
+  bibtexUrl?: string;
+  citationCount: number;
+  primaryArchive?: string;
+}
+
+interface CitationSummary {
+  papers: number;
+  citations: number;
+  hIndex: number;
 }
 
 const researchAreas = [
@@ -61,12 +71,156 @@ const formatAuthorName = (fullName: string) => {
   return `${lastName}, ${initials}.`;
 };
 
-const formatAuthorList = (authors: string) => {
-  const authorList = authors.split(", ");
+const INSPIRE_AUTHOR_QUERY = "a Edward.Hirst.1";
+const INSPIRE_API_BASE = "https://inspirehep.net/api";
+const defaultPublicationCount = 3;
+const publicationPageSize = 100;
+
+const getTotalHits = (total: number | { value?: number }) => {
+  if (typeof total === "number") return total;
+  return total?.value ?? 0;
+};
+
+const formatAuthorList = (authorList: string[]) => {
   if (authorList.length <= 8) {
     return authorList.map(formatAuthorName).join(", ");
   }
   return authorList.slice(0, 8).map(formatAuthorName).join(", ") + " et al.";
+};
+
+const getPrimaryArchive = (metadata: any) =>
+  metadata.primary_arxiv_category?.[0] ??
+  metadata.arxiv_eprints?.[0]?.categories?.[0];
+
+const mapPublication = (hit: any): Publication => {
+  const metadata = hit.metadata;
+  const arxivId = metadata.arxiv_eprints?.[0]?.value;
+
+  return {
+    id: hit.id,
+    title: metadata.titles?.[0]?.title ?? "Untitled publication",
+    authors: (metadata.authors ?? []).map((author: any) => author.full_name),
+    abstract: metadata.abstracts?.[0]?.value,
+    link: arxivId
+      ? `https://arxiv.org/pdf/${arxivId}`
+      : `https://inspirehep.net/literature/${hit.id}`,
+    arxivId,
+    bibtexUrl:
+      hit.links?.bibtex ??
+      `${INSPIRE_API_BASE}/literature/${hit.id}?format=bibtex`,
+    citationCount: metadata.citation_count ?? 0,
+    primaryArchive: getPrimaryArchive(metadata),
+  };
+};
+
+const fetchPublicationPage = async (page: number) => {
+  const params = new URLSearchParams({
+    sort: "mostrecent",
+    size: String(publicationPageSize),
+    page: String(page),
+    q: INSPIRE_AUTHOR_QUERY,
+  });
+
+  const response = await fetch(`${INSPIRE_API_BASE}/literature?${params}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+const fetchAllPublications = async () => {
+  const firstPage = await fetchPublicationPage(1);
+  const total = getTotalHits(firstPage.hits.total);
+  const totalPages = Math.ceil(total / publicationPageSize);
+  const remainingPages = Array.from(
+    { length: Math.max(totalPages - 1, 0) },
+    (_, index) => fetchPublicationPage(index + 2)
+  );
+  const remainingResults = await Promise.all(remainingPages);
+  const hits = [
+    ...firstPage.hits.hits,
+    ...remainingResults.flatMap((result) => result.hits.hits),
+  ];
+
+  return {
+    publications: hits.map(mapPublication),
+    total,
+  };
+};
+
+const fetchCitationSummary = async () => {
+  const params = new URLSearchParams({
+    q: INSPIRE_AUTHOR_QUERY,
+    facet_name: "citation-summary",
+  });
+
+  const response = await fetch(`${INSPIRE_API_BASE}/literature/facets?${params}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const summary = data.aggregations?.citation_summary;
+
+  return {
+    papers: getTotalHits(data.hits.total),
+    citations:
+      summary?.citations?.buckets?.all?.citations_count?.value ?? 0,
+    hIndex: summary?.["h-index"]?.value?.all ?? 0,
+  };
+};
+
+const loadMathJax = () => {
+  if (window.__mathJaxLoadPromise) {
+    return window.__mathJaxLoadPromise;
+  }
+
+  window.__mathJaxLoadPromise = new Promise<void>((resolve, reject) => {
+    if (!document.getElementById("MathJax-config")) {
+      const config = document.createElement("script");
+      config.id = "MathJax-config";
+      config.text = `
+        window.MathJax = {
+          startup: {
+            typeset: false
+          },
+          tex: {
+            inlineMath: [['\\\\(', '\\\\)']],
+            displayMath: [['\\\\[', '\\\\]']],
+            processEscapes: true
+          },
+          options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+          }
+        };
+      `;
+      document.head.appendChild(config);
+    }
+
+    const existingScript = document.getElementById("MathJax-script");
+    if (existingScript) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+    script.async = true;
+    script.id = "MathJax-script";
+    script.crossOrigin = "anonymous";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load MathJax"));
+    document.head.appendChild(script);
+  });
+
+  return window.__mathJaxLoadPromise;
 };
 
 const renderLatex = (text: string) => {
@@ -92,91 +246,28 @@ const renderLatex = (text: string) => {
 const Research: React.FC = () => {
   const theme = useTheme();
   const [publications, setPublications] = useState<Publication[]>([]);
+  const [citationSummary, setCitationSummary] =
+    useState<CitationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedAbstracts, setExpandedAbstracts] = useState<{
-    [key: number]: boolean;
+    [key: string]: boolean;
   }>({});
   const [showAllPublications, setShowAllPublications] = useState(false);
-  const defaultPublicationCount = 3;
-  const maxPublications = 6;
 
   useEffect(() => {
     const fetchPublications = async () => {
       try {
-        const response = await fetch(
-          `https://inspirehep.net/api/literature?sort=mostrecent&size=${maxPublications}&q=a%20Edward.Hirst.1`,
-          {
-            headers: {
-              Accept: "application/json",
-              "User-Agent": "Mozilla/5.0 (compatible; AcademicWebsite/1.0)",
-            },
-          }
-        );
+        const [publicationResult, summary] = await Promise.all([
+          fetchAllPublications(),
+          fetchCitationSummary(),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        const pubs = await Promise.all(
-          data.hits.hits.map(async (hit: any) => {
-            try {
-              const bibtexResponse = await fetch(
-                `https://inspirehep.net/api/literature/${hit.id}?format=bibtex`,
-                {
-                  headers: {
-                    Accept: "text/plain",
-                    "User-Agent":
-                      "Mozilla/5.0 (compatible; AcademicWebsite/1.0)",
-                  },
-                }
-              );
-
-              if (!bibtexResponse.ok) {
-                throw new Error(`Failed to fetch BibTeX for ${hit.id}`);
-              }
-
-              const bibtex = await bibtexResponse.text();
-              const arxivId = hit.metadata.arxiv_eprints?.[0]?.value;
-
-              // Format the authors as a list of last names, first initials
-              const authors = hit.metadata.authors.map((a: any) => {
-                const parts = a.full_name.split(", ");
-                const lastName = parts[0];
-                const firstNames = parts[1].split(" ");
-                const initials = firstNames
-                  .map((name: string) => name.charAt(0))
-                  .join(".");
-                return `${lastName}, ${initials}.`;
-              });
-
-              return {
-                title: hit.metadata.titles[0].title,
-                authors: authors.join(", "),
-                abstract: hit.metadata.abstracts?.[0]?.value,
-                link: arxivId
-                  ? `https://arxiv.org/pdf/${arxivId}`
-                  : `https://inspirehep.net/literature/${hit.id}`,
-                arxivId,
-                bibtex,
-              };
-            } catch (error) {
-              console.error(`Error fetching BibTeX for ${hit.id}:`, error);
-              return {
-                title: hit.metadata.titles[0].title,
-                authors: hit.metadata.authors
-                  .map((a: any) => a.full_name)
-                  .join(", "),
-                abstract: hit.metadata.abstracts?.[0]?.value,
-                link: `https://inspirehep.net/literature/${hit.id}`,
-              };
-            }
-          })
-        );
-
-        setPublications(pubs);
+        setPublications(publicationResult.publications);
+        setCitationSummary({
+          ...summary,
+          papers: publicationResult.total || summary.papers,
+        });
         setError(null);
       } catch (error) {
         console.error("Error fetching publications:", error);
@@ -190,45 +281,9 @@ const Research: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Add MathJax configuration first
-    const config = document.createElement("script");
-    config.text = `
-      window.MathJax = {
-        startup: {
-          typeset: false
-        },
-        tex: {
-          inlineMath: [['\\\\(', '\\\\)']],
-          displayMath: [['\\\\[', '\\\\]']],
-          processEscapes: true
-        },
-        options: {
-          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-        }
-      };
-    `;
-    document.head.appendChild(config);
-
-    // Then load MathJax
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
-    script.async = true;
-    script.id = "MathJax-script";
-
-    script.onerror = (e) => {
-      console.error("Error loading MathJax:", e);
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (config.parentNode) {
-        config.parentNode.removeChild(config);
-      }
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
+    loadMathJax().catch((error) => {
+      console.error("Error loading MathJax:", error);
+    });
   }, []);
 
   // Separate effect for handling MathJax rendering
@@ -244,17 +299,27 @@ const Research: React.FC = () => {
     };
 
     renderMath();
-  }, [expandedAbstracts]);
+  }, [expandedAbstracts, publications, showAllPublications]);
 
-  const toggleAbstract = (index: number) => {
+  const toggleAbstract = (id: string) => {
     setExpandedAbstracts((prev) => ({
       ...prev,
-      [index]: !prev[index],
+      [id]: !prev[id],
     }));
   };
 
-  const copyBibtex = async (bibtex: string) => {
+  const copyBibtex = async (publication: Publication) => {
     try {
+      if (!publication.bibtexUrl) return;
+      const response = await fetch(publication.bibtexUrl, {
+        headers: { Accept: "text/plain" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch BibTeX for ${publication.id}`);
+      }
+
+      const bibtex = await response.text();
       await navigator.clipboard.writeText(bibtex);
     } catch (err) {
       console.error("Failed to copy text: ", err);
@@ -264,6 +329,7 @@ const Research: React.FC = () => {
   const displayedPublications = showAllPublications
     ? publications
     : publications.slice(0, defaultPublicationCount);
+  const sectionTitle = showAllPublications ? "Publications" : "Recent Publications";
 
   return (
     <Box
@@ -321,13 +387,34 @@ const Research: React.FC = () => {
         </Box>
 
         <Box>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ display: "flex", alignItems: "center" }}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: { xs: "flex-start", sm: "center" },
+              justifyContent: "space-between",
+              flexDirection: { xs: "column", sm: "row" },
+              gap: 1,
+              mb: 1,
+              pr: showAllPublications ? { xs: 0.5, sm: 1 } : 0,
+            }}
           >
-            <ArticleIcon sx={{ mr: 1 }} /> Recent Publications
-          </Typography>
+            <Typography
+              variant="h6"
+              sx={{ display: "flex", alignItems: "center" }}
+            >
+              <ArticleIcon sx={{ mr: 1 }} /> {sectionTitle}
+            </Typography>
+            {citationSummary && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                Papers: {citationSummary.papers}, Citations:{" "}
+                {citationSummary.citations}, h-index: {citationSummary.hIndex}
+              </Typography>
+            )}
+          </Box>
 
           {loading ? (
             <Box display="flex" justifyContent="center" my={4}>
@@ -339,103 +426,136 @@ const Research: React.FC = () => {
             </Typography>
           ) : (
             <>
-              {displayedPublications.map((pub, index) => (
-                <Paper
-                  key={index}
-                  elevation={1}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    transition: "box-shadow 0.2s, background-color 0.2s",
-                    "&:hover": {
-                      boxShadow: 3,
-                      backgroundColor:
-                        theme.palette.mode === "light"
-                          ? "rgba(0, 0, 0, 0.02)"
-                          : "rgba(255, 255, 255, 0.05)",
-                    },
-                  }}
-                >
-                  <Box sx={{ mb: 1 }}>
-                    <Link
-                      href={pub.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      sx={{
-                        color: "primary.main",
-                        textDecoration: "none",
-                        "&:hover": { textDecoration: "underline" },
-                      }}
-                    >
-                      <Typography
-                        variant="h6"
-                        component="h3"
-                        dangerouslySetInnerHTML={{
-                          __html: renderLatex(pub.title),
-                        }}
-                      />
-                    </Link>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatAuthorList(pub.authors)}
-                    </Typography>
-                  </Box>
-
-                  <Box
+              <Box
+                sx={{
+                  maxHeight: showAllPublications
+                    ? { xs: "70vh", md: 680 }
+                    : "none",
+                  overflowY: showAllPublications ? "auto" : "visible",
+                  pr: showAllPublications ? { xs: 0.5, sm: 1 } : 0,
+                }}
+              >
+                {displayedPublications.map((pub) => (
+                  <Paper
+                    key={pub.id}
+                    elevation={1}
                     sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      mt: 1,
-                    }}
-                  >
-                    {pub.abstract && (
-                      <Button
-                        onClick={() => toggleAbstract(index)}
-                        startIcon={
-                          expandedAbstracts[index] ? (
-                            <ExpandLessIcon />
-                          ) : (
-                            <ExpandMoreIcon />
-                          )
-                        }
-                        sx={{ textTransform: "none" }}
-                      >
-                        {expandedAbstracts[index] ? "Hide" : "Show"} Abstract
-                      </Button>
-                    )}
-
-                    {pub.bibtex && (
-                      <Tooltip title="Copy BibTeX">
-                        <IconButton
-                          onClick={() => copyBibtex(pub.bibtex!)}
-                          size="small"
-                          sx={{ ml: "auto" }}
-                        >
-                          <ContentCopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-
-                  {expandedAbstracts[index] && pub.abstract && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        mt: 1,
-                        p: 1,
+                      p: 2,
+                      mb: 2,
+                      transition: "box-shadow 0.2s, background-color 0.2s",
+                      "&:hover": {
+                        boxShadow: 3,
                         backgroundColor:
                           theme.palette.mode === "light"
                             ? "rgba(0, 0, 0, 0.02)"
                             : "rgba(255, 255, 255, 0.05)",
-                        borderRadius: 1,
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "stretch",
+                        gap: 2,
                       }}
-                      dangerouslySetInnerHTML={{
-                        __html: renderLatex(pub.abstract),
-                      }}
-                    />
-                  )}
-                </Paper>
-              ))}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Box sx={{ mb: 1 }}>
+                          <Link
+                            href={pub.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{
+                              color: "primary.main",
+                              textDecoration: "none",
+                              "&:hover": { textDecoration: "underline" },
+                            }}
+                          >
+                            <Typography
+                              variant="h6"
+                              component="h3"
+                              dangerouslySetInnerHTML={{
+                                __html: renderLatex(pub.title),
+                              }}
+                            />
+                          </Link>
+                          <Typography variant="body2" color="text.secondary">
+                            {formatAuthorList(pub.authors)}
+                            {pub.primaryArchive && ` [${pub.primaryArchive}]`}
+                          </Typography>
+                        </Box>
+
+                        {pub.abstract && (
+                          <Button
+                            onClick={() => toggleAbstract(pub.id)}
+                            startIcon={
+                              expandedAbstracts[pub.id] ? (
+                                <ExpandLessIcon />
+                              ) : (
+                                <ExpandMoreIcon />
+                              )
+                            }
+                            sx={{ textTransform: "none" }}
+                          >
+                            {expandedAbstracts[pub.id] ? "Hide" : "Show"}{" "}
+                            Abstract
+                          </Button>
+                        )}
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          justifyContent: "space-between",
+                          flexShrink: 0,
+                          minWidth: { xs: 58, sm: 84 },
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ textAlign: "right" }}
+                        >
+                          {pub.citationCount}{" "}
+                          {pub.citationCount === 1 ? "citation" : "citations"}
+                        </Typography>
+
+                        {pub.bibtexUrl && (
+                          <Tooltip title="Copy BibTeX">
+                            <IconButton
+                              onClick={() => copyBibtex(pub)}
+                              size="small"
+                              sx={{ mr: -0.5 }}
+                            >
+                              <ContentCopyIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </Box>
+
+                    {expandedAbstracts[pub.id] && pub.abstract && (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          mt: 1,
+                          p: 1,
+                          backgroundColor:
+                            theme.palette.mode === "light"
+                              ? "rgba(0, 0, 0, 0.02)"
+                              : "rgba(255, 255, 255, 0.05)",
+                          borderRadius: 1,
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: renderLatex(pub.abstract),
+                        }}
+                      />
+                    )}
+                  </Paper>
+                ))}
+              </Box>
 
               <Box
                 sx={{
@@ -450,46 +570,34 @@ const Research: React.FC = () => {
                     variant="outlined"
                     onClick={() => setShowAllPublications(!showAllPublications)}
                   >
-                    {showAllPublications
-                      ? "Show Less"
-                      : "Show More Publications"}
+                    {showAllPublications ? "Show Recent" : "Show All"}
                   </Button>
                 )}
-
-                <Button
-                  variant="outlined"
-                  component="a"
-                  href="https://inspirehep.net/authors/1791403"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  sx={{textAlign: "center"}}
-                >
-                  View Full Publication List on Inspire
-                </Button>
               </Box>
             </>
           )}
         </Box>
-        <Typography
-          variant="body1"
-          paragraph
+        <Box
           sx={{
             mt: 2,
             textAlign: "center",
           }}
         >
-          I'm always open to enquiries for supervision from prospective
-          students, or for more general research collaboration.
+          <Typography variant="body1" sx={{ mb: 0 }}>
+            I'm always open to enquiries for supervision from prospective
+            students, or for more general research collaboration.
+          </Typography>
           <Link
             href="mailto:ehirst@unicamp.br"
+            variant="body1"
             sx={{
-              mt: 1,
+              display: "inline-block",
               "&:hover": { color: "primary.main" },
             }}
           >
-            <Typography variant="body1">Please get in touch!</Typography>
+            Please get in touch!
           </Link>
-        </Typography>
+        </Box>
       </Container>
     </Box>
   );

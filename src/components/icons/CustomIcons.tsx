@@ -32,9 +32,6 @@ export const InspireIcon: React.FC<SvgIconProps> = (props) => {
 
 // Google Scholar icon
 export const GoogleScholarIcon: React.FC<SvgIconProps> = (props) => {
-  const theme = useTheme();
-  const isDarkMode = theme.palette.mode === "dark";
-
   return (
     <SvgIcon {...props} viewBox="0 0 24 24">
       {/* Official Google Scholar logo - combined path with nonzero fill rule */}
